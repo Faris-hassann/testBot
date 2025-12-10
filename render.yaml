@@ -3,10 +3,12 @@ services:
     name: bitrix-bot
     env: python
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
-    startCommand: gunicorn bitrix_bot.wsgi:application
+    startCommand: gunicorn bitrix_bot.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: DJANGO_SETTINGS_MODULE
         value: bitrix_bot.settings
+      - key: PORT
+        value: 8000
       - key: BITRIX_DOMAIN
         sync: false
       - key: BITRIX_CLIENT_ID
