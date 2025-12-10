@@ -51,10 +51,10 @@ pip install -r requirements.txt && python manage.py collectstatic --noinput
 
 ### Start Command
 ```bash
-gunicorn bitrix_bot.wsgi:application --bind 0.0.0.0:$PORT
+gunicorn bitrix_bot.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
 ```
 
-**Note**: The `PORT` environment variable is set to `8000` in the Render configuration. Render will automatically provide the `$PORT` variable, but we've set it to 8000 explicitly.
+**Note**: Render automatically provides the `$PORT` environment variable. The application will bind to whatever port Render assigns (typically 10000 or similar). Do not set PORT manually in environment variables.
 
 ### Environment Variables (Set in Render Dashboard)
 - `DJANGO_SETTINGS_MODULE`: `bitrix_bot.settings`
