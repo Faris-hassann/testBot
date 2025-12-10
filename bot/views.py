@@ -2,7 +2,6 @@ import re
 import json
 import logging
 import urllib.parse
-from django.http import JsonResponse, HttpResponse
 from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -16,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 @swagger_auto_schema(
     method='post',
-    operation_description="Handle incoming webhook from Bitrix24. Receives messages and sends response back.",
+    operation_description="Receive message from Bitrix24 webhook and send response back to the dialog.",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         properties={
@@ -58,14 +57,14 @@ logger = logging.getLogger(__name__)
             )
         )
     },
-    tags=['Webhook']
+    tags=['Messages']
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def webhook_handler(request):
     """
-    Handle incoming webhook from Bitrix24.
-    Receives messages and sends response back.
+    Receive message from Bitrix24 webhook.
+    Prints the message and sends a response back to the dialog.
     """
     try:
         # Parse incoming data
@@ -118,11 +117,18 @@ def webhook_handler(request):
         # Extract access token from BOT section
         bot_data = data.get('BOT', [])
         access_token = ''
+        bot_info = {}
         if isinstance(bot_data, list):
             for bot in bot_data:
-                if isinstance(bot, dict) and 'access_token' in bot:
-                    access_token = bot['access_token']
+                if isinstance(bot, dict):
+                    if 'access_token' in bot:
+                        access_token = bot['access_token']
+                    # Store all bot information
+                    bot_info = bot.copy()
                     break
+        elif isinstance(bot_data, dict):
+            bot_info = bot_data.copy()
+            access_token = bot_data.get('access_token', '')
         
         # Log everything
         logger.info(f"User ID: {user_id}")
@@ -131,6 +137,12 @@ def webhook_handler(request):
         logger.info(f"Links Found: {', '.join(found_links)}")
         logger.info(f"Deal ID: {deal_id}")
         logger.info(f"Access Token: {access_token[:10]}..." if access_token else "Access Token: (empty)")
+        
+        # Log bot information
+        if bot_info:
+            logger.info(f"Bot Information: {json.dumps(bot_info, indent=2)}")
+        else:
+            logger.info("Bot Information: (empty)")
         
         # Print to console
         print(f"\n{'='*50}")
@@ -141,6 +153,15 @@ def webhook_handler(request):
         print(f"Message: {message}")
         print(f"Links Found: {', '.join(found_links) if found_links else 'None'}")
         print(f"Deal ID: {deal_id if deal_id else 'None'}")
+        if bot_info:
+            print(f"\n🤖 Bot Information:")
+            for key, value in bot_info.items():
+                if key == 'access_token' and value:
+                    print(f"  {key}: {value[:20]}... (truncated)")
+                else:
+                    print(f"  {key}: {value}")
+        else:
+            print(f"Bot Information: None")
         print(f"{'='*50}\n")
         
         # Send response message back to dialog
@@ -158,7 +179,7 @@ def webhook_handler(request):
 
 def send_message_to_dialog(dialog_id, access_token, user_message, links, deal_id):
     """
-    Send a message back to the Bitrix24 chat dialog.
+    Send a message back to the Bitrix24 chat dialog using settings from settings.py.
     
     Args:
         dialog_id: Dialog/Chat ID
@@ -167,9 +188,8 @@ def send_message_to_dialog(dialog_id, access_token, user_message, links, deal_id
         links: List of extracted links from message
         deal_id: Deal ID if available
     """
-    # Build response message
-    response_message = "✅ Message received!\n"
-    response_message += f"Original message: {user_message[:100]}"
+    # Build response message - echo the received message
+    response_message = f"📨 Received: {user_message}"
     
     if links:
         response_message += f"\n\n🔗 Found {len(links)} link(s):\n"
@@ -179,7 +199,7 @@ def send_message_to_dialog(dialog_id, access_token, user_message, links, deal_id
     if deal_id:
         response_message += f"\n💼 Deal ID: {deal_id}"
     
-    # Bitrix24 API endpoint for sending messages via bot
+    # Bitrix24 API endpoint for sending messages via bot (using BITRIX_DOMAIN from settings)
     url = f"https://{settings.BITRIX_DOMAIN}/rest/imbot.message.add.json?auth={access_token}"
     
     # Message payload
@@ -188,7 +208,7 @@ def send_message_to_dialog(dialog_id, access_token, user_message, links, deal_id
         'MESSAGE': response_message
     }
     
-    logger.info(f"📤 Sending message to dialog {dialog_id} with token: {access_token[:10]}...")
+    logger.info(f"📤 Sending message to dialog {dialog_id}")
     logger.info(f"📝 Message content: {response_message}")
     
     # Print to console
@@ -222,191 +242,4 @@ def send_message_to_dialog(dialog_id, access_token, user_message, links, deal_id
     except requests.exceptions.RequestException as e:
         logger.error(f"❌ Error when sending message: {str(e)}")
         print(f"❌ Error sending message: {str(e)}")
-
-
-@swagger_auto_schema(
-    method='post',
-    operation_description="Handle app installation from Bitrix24. Receives auth token and registers the bot.",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        properties={
-            'auth': openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'access_token': openapi.Schema(type=openapi.TYPE_STRING, description='Access token from Bitrix24')
-                }
-            )
-        }
-    ),
-    responses={
-        200: openapi.Response(description='Bot registration response from Bitrix24'),
-        400: openapi.Response(description='AUTH_ID missing'),
-        500: openapi.Response(description='Bot registration failed')
-    },
-    tags=['Bot Registration']
-)
-@swagger_auto_schema(
-    method='get',
-    operation_description="Handle app installation from Bitrix24 (GET method).",
-    manual_parameters=[
-        openapi.Parameter('access_token', openapi.IN_QUERY, description="Access token", type=openapi.TYPE_STRING),
-    ],
-    responses={
-        200: openapi.Response(description='Bot registration response from Bitrix24'),
-        400: openapi.Response(description='AUTH_ID missing'),
-        500: openapi.Response(description='Bot registration failed')
-    },
-    tags=['Bot Registration']
-)
-@api_view(['POST', 'GET'])
-@permission_classes([AllowAny])
-def install_app(request):
-    """
-    Handle app installation from Bitrix24.
-    Receives auth token and registers the bot.
-    """
-    try:
-        if request.method == 'POST':
-            body = request.body.decode('utf-8')
-            data = json.loads(body) if body else {}
-        else:
-            # For GET requests, check query parameters
-            data = request.GET.dict()
-        
-        # Extract AUTH_ID from the payload
-        auth_id = None
-        if 'auth' in data and isinstance(data['auth'], dict):
-            auth_id = data['auth'].get('access_token')
-        elif 'auth' in data:
-            auth_id = data.get('auth')
-        elif 'access_token' in data:
-            auth_id = data.get('access_token')
-        
-        if not auth_id:
-            logger.error("❌ No AUTH_ID received.")
-            return Response({"error": "AUTH_ID missing"}, status=400)
-        
-        # Register bot
-        event_handler = settings.BITRIX_EVENT_HANDLER
-        url = f"https://{settings.BITRIX_DOMAIN}/rest/imbot.register.json?auth={auth_id}"
-        
-        bot_data = {
-            'CODE': 'inbox_bot',
-            'TYPE': 'B',
-            'OPENLINE': 'Y',
-            'EVENT_HANDLER': event_handler,
-            'PROPERTIES': {
-                'NAME': 'Inbox Bot',
-                'COLOR': 'GREEN'
-            }
-        }
-        
-        logger.info("🔄 Sending bot registration request to Bitrix24...")
-        print(f"\n🔄 Registering bot with Bitrix24...")
-        print(f"Event Handler: {event_handler}")
-        
-        try:
-            response = requests.post(
-                url,
-                data=bot_data,
-                timeout=30,
-                verify=False
-            )
-            
-            if response.status_code == 200:
-                logger.info(f"✅ Bot registration response: {response.text}")
-                print(f"✅ Bot registered successfully!")
-                print(f"Response: {response.text[:200]}")
-                try:
-                    return Response(json.loads(response.text), content_type='application/json')
-                except json.JSONDecodeError:
-                    return Response({"response": response.text}, content_type='application/json')
-            else:
-                logger.error(f"❌ Bot registration failed: HTTP {response.status_code}")
-                logger.error(f"Response: {response.text}")
-                print(f"❌ Registration failed. HTTP {response.status_code}: {response.text[:200]}")
-                return Response({"error": "Bot registration failed"}, status=response.status_code)
-                
-        except requests.exceptions.RequestException as e:
-            logger.error(f"❌ Bot registration failed: {str(e)}")
-            print(f"❌ Registration error: {str(e)}")
-            return Response({"error": f"Bot registration failed: {str(e)}"}, status=500)
-            
-    except Exception as e:
-        logger.error(f"Error in install_app: {str(e)}", exc_info=True)
-        return Response({"error": str(e)}, status=500)
-
-
-@swagger_auto_schema(
-    method='post',
-    operation_description="Register bot using client ID and secret. Alternative registration method.",
-    responses={
-        200: openapi.Response(description='Bot registration response from Bitrix24'),
-        500: openapi.Response(description='Bot registration failed')
-    },
-    tags=['Bot Registration']
-)
-@swagger_auto_schema(
-    method='get',
-    operation_description="Register bot using client ID and secret (GET method).",
-    responses={
-        200: openapi.Response(description='Bot registration response from Bitrix24'),
-        500: openapi.Response(description='Bot registration failed')
-    },
-    tags=['Bot Registration']
-)
-@api_view(['POST', 'GET'])
-@permission_classes([AllowAny])
-def register_bot(request):
-    """
-    Register bot using client ID and secret.
-    Alternative registration method.
-    """
-    try:
-        client_id = settings.BITRIX_CLIENT_ID
-        client_secret = settings.BITRIX_CLIENT_SECRET
-        domain = settings.BITRIX_DOMAIN
-        event_handler = settings.BITRIX_EVENT_HANDLER
-        
-        url = f"https://{domain}/rest/{client_id}/{client_secret}/imbot.register.json"
-        
-        bot_data = {
-            'CODE': 'open_channel_inbox_bot',
-            'TYPE': 'B',  # Bot
-            'EVENT_HANDLER': event_handler,
-            'OPENLINE': 'Y',
-            'PROPERTIES': {
-                'NAME': 'Inbox Bot',
-                'COLOR': 'GREEN'
-            }
-        }
-        
-        logger.info(f"🔄 Registering bot via client credentials...")
-        print(f"\n🔄 Registering bot with client ID/Secret...")
-        print(f"URL: {url}")
-        print(f"Event Handler: {event_handler}")
-        
-        try:
-            response = requests.post(
-                url,
-                data=bot_data,
-                timeout=30,
-                verify=False
-            )
-            
-            logger.info(f"Bot registration response: {response.text}")
-            print(f"✅ Registration response: {response.text[:200]}")
-            try:
-                return Response(json.loads(response.text), content_type='application/json')
-            except json.JSONDecodeError:
-                return Response({"response": response.text}, content_type='application/json')
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"❌ Bot registration failed: {str(e)}")
-            print(f"❌ Registration error: {str(e)}")
-            return Response({"error": str(e)}, status=500)
-            
-    except Exception as e:
-        logger.error(f"Error in register_bot: {str(e)}", exc_info=True)
-        return Response({"error": str(e)}, status=500)
 

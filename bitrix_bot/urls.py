@@ -14,7 +14,7 @@ schema_view = get_schema_view(
     openapi.Info(
         title="Bitrix24 Bot API",
         default_version='v1',
-        description="API documentation for Bitrix24 Bot webhook and registration endpoints",
+        description="API documentation for Bitrix24 Bot - Send and Receive Messages",
         terms_of_service="https://www.google.com/policies/terms/",
         contact=openapi.Contact(email="contact@bitrixbot.local"),
         license=openapi.License(name="BSD License"),
@@ -37,7 +37,5 @@ urlpatterns = [
     
     # API endpoints
     path('b24-hook.php', views.webhook_handler, name='webhook'),
-    path('register-bot/', views.register_bot, name='register_bot'),
-    path('install/', views.install_app, name='install'),
 ]
 
