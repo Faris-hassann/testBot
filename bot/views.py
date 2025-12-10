@@ -3,9 +3,10 @@ import json
 import logging
 import urllib.parse
 from django.http import JsonResponse, HttpResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
 from django.conf import settings
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 import requests
@@ -59,8 +60,8 @@ logger = logging.getLogger(__name__)
     },
     tags=['Webhook']
 )
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def webhook_handler(request):
     """
     Handle incoming webhook from Bitrix24.
@@ -81,7 +82,7 @@ def webhook_handler(request):
             except json.JSONDecodeError:
                 logger.error("⚠️ Unexpected payload structure")
                 logger.error(f"Body: {body}")
-                return JsonResponse({"result": "ok"})
+                return Response({"result": "ok"})
         else:
             # If data is a string, try to parse it as JSON
             try:
@@ -94,7 +95,7 @@ def webhook_handler(request):
         if not isinstance(data, dict):
             logger.error("⚠️ Data is not a dictionary")
             logger.error(f"Data type: {type(data)}, Data: {data}")
-            return JsonResponse({"result": "ok"})
+            return Response({"result": "ok"})
         
         # Extract parameters
         params = data.get('PARAMS', {})
@@ -148,11 +149,11 @@ def webhook_handler(request):
         else:
             logger.warning("⚠️ Cannot send response: missing accessToken or dialogId")
         
-        return JsonResponse({"result": "ok"})
+        return Response({"result": "ok"})
         
     except Exception as e:
         logger.error(f"Error processing webhook: {str(e)}", exc_info=True)
-        return JsonResponse({"result": "ok"})
+        return Response({"result": "ok"})
 
 
 def send_message_to_dialog(dialog_id, access_token, user_message, links, deal_id):
@@ -257,8 +258,8 @@ def send_message_to_dialog(dialog_id, access_token, user_message, links, deal_id
     },
     tags=['Bot Registration']
 )
-@csrf_exempt
-@require_http_methods(["POST", "GET"])
+@api_view(['POST', 'GET'])
+@permission_classes([AllowAny])
 def install_app(request):
     """
     Handle app installation from Bitrix24.
@@ -283,7 +284,7 @@ def install_app(request):
         
         if not auth_id:
             logger.error("❌ No AUTH_ID received.")
-            return JsonResponse({"error": "AUTH_ID missing"}, status=400)
+            return Response({"error": "AUTH_ID missing"}, status=400)
         
         # Register bot
         event_handler = settings.BITRIX_EVENT_HANDLER
@@ -316,21 +317,24 @@ def install_app(request):
                 logger.info(f"✅ Bot registration response: {response.text}")
                 print(f"✅ Bot registered successfully!")
                 print(f"Response: {response.text[:200]}")
-                return HttpResponse(response.text, content_type='application/json')
+                try:
+                    return Response(json.loads(response.text), content_type='application/json')
+                except json.JSONDecodeError:
+                    return Response({"response": response.text}, content_type='application/json')
             else:
                 logger.error(f"❌ Bot registration failed: HTTP {response.status_code}")
                 logger.error(f"Response: {response.text}")
                 print(f"❌ Registration failed. HTTP {response.status_code}: {response.text[:200]}")
-                return JsonResponse({"error": "Bot registration failed"}, status=response.status_code)
+                return Response({"error": "Bot registration failed"}, status=response.status_code)
                 
         except requests.exceptions.RequestException as e:
             logger.error(f"❌ Bot registration failed: {str(e)}")
             print(f"❌ Registration error: {str(e)}")
-            return JsonResponse({"error": f"Bot registration failed: {str(e)}"}, status=500)
+            return Response({"error": f"Bot registration failed: {str(e)}"}, status=500)
             
     except Exception as e:
         logger.error(f"Error in install_app: {str(e)}", exc_info=True)
-        return JsonResponse({"error": str(e)}, status=500)
+        return Response({"error": str(e)}, status=500)
 
 
 @swagger_auto_schema(
@@ -351,8 +355,8 @@ def install_app(request):
     },
     tags=['Bot Registration']
 )
-@csrf_exempt
-@require_http_methods(["POST", "GET"])
+@api_view(['POST', 'GET'])
+@permission_classes([AllowAny])
 def register_bot(request):
     """
     Register bot using client ID and secret.
@@ -392,14 +396,17 @@ def register_bot(request):
             
             logger.info(f"Bot registration response: {response.text}")
             print(f"✅ Registration response: {response.text[:200]}")
-            return HttpResponse(response.text, content_type='application/json')
+            try:
+                return Response(json.loads(response.text), content_type='application/json')
+            except json.JSONDecodeError:
+                return Response({"response": response.text}, content_type='application/json')
             
         except requests.exceptions.RequestException as e:
             logger.error(f"❌ Bot registration failed: {str(e)}")
             print(f"❌ Registration error: {str(e)}")
-            return JsonResponse({"error": str(e)}, status=500)
+            return Response({"error": str(e)}, status=500)
             
     except Exception as e:
         logger.error(f"Error in register_bot: {str(e)}", exc_info=True)
-        return JsonResponse({"error": str(e)}, status=500)
+        return Response({"error": str(e)}, status=500)
 
