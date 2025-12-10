@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: bitrix-bot
+    env: python
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+    startCommand: gunicorn bitrix_bot.wsgi:application
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: bitrix_bot.settings
+      - key: BITRIX_DOMAIN
+        sync: false
+      - key: BITRIX_CLIENT_ID
+        sync: false
+      - key: BITRIX_CLIENT_SECRET
+        sync: false
+      - key: BITRIX_EVENT_HANDLER
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+
