@@ -15,36 +15,10 @@ logger = logging.getLogger(__name__)
 
 @swagger_auto_schema(
     method='post',
-    operation_description="Receive message from Bitrix24 webhook and send response back to the dialog.",
+    operation_description="Handle incoming message from Bitrix24 bot (EVENT_MESSAGE_ADD).",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
-        properties={
-            'data': openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                description='Webhook data from Bitrix24',
-                properties={
-                    'PARAMS': openapi.Schema(
-                        type=openapi.TYPE_OBJECT,
-                        properties={
-                            'MESSAGE': openapi.Schema(type=openapi.TYPE_STRING, description='Message text'),
-                            'DIALOG_ID': openapi.Schema(type=openapi.TYPE_STRING, description='Dialog/Chat ID'),
-                            'FROM_USER_ID': openapi.Schema(type=openapi.TYPE_STRING, description='User ID'),
-                            'CHAT_ENTITY_DATA_1': openapi.Schema(type=openapi.TYPE_STRING, description='Entity data'),
-                        }
-                    ),
-                    'BOT': openapi.Schema(
-                        type=openapi.TYPE_ARRAY,
-                        description='Bot data array',
-                        items=openapi.Schema(
-                            type=openapi.TYPE_OBJECT,
-                            properties={
-                                'access_token': openapi.Schema(type=openapi.TYPE_STRING, description='Bot access token')
-                            }
-                        )
-                    )
-                }
-            )
-        }
+        description='Message event data from Bitrix24'
     ),
     responses={
         200: openapi.Response(
@@ -57,13 +31,139 @@ logger = logging.getLogger(__name__)
             )
         )
     },
-    tags=['Messages']
+    tags=['Bot Events']
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def webhook_handler(request):
+def bot_message(request):
     """
-    Receive message from Bitrix24 webhook.
+    Handle EVENT_MESSAGE_ADD - when a new message is sent to the bot.
+    This is the main message handler endpoint.
+    """
+    return process_message(request)
+
+
+@swagger_auto_schema(
+    method='post',
+    operation_description="Handle welcome message event from Bitrix24 bot (EVENT_WELCOME_MESSAGE).",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        description='Welcome message event data from Bitrix24'
+    ),
+    responses={
+        200: openapi.Response(
+            description='Success',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'result': openapi.Schema(type=openapi.TYPE_STRING, example='ok')
+                }
+            )
+        )
+    },
+    tags=['Bot Events']
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def bot_welcome(request):
+    """
+    Handle EVENT_WELCOME_MESSAGE - when a user first interacts with the bot.
+    """
+    try:
+        # Parse incoming data
+        body = request.body.decode('utf-8')
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            # Try parsing as query string
+            parsed = urllib.parse.parse_qs(body)
+            data_str = parsed.get('data', [None])[0]
+            if data_str:
+                try:
+                    data = json.loads(data_str) if isinstance(data_str, str) else data_str
+                except (json.JSONDecodeError, TypeError):
+                    data = data_str if isinstance(data_str, dict) else {}
+            else:
+                data = {}
+        
+        logger.info("🎉 Welcome message event received")
+        logger.info(f"Welcome data: {json.dumps(data, indent=2)}")
+        
+        print(f"\n{'='*50}")
+        print(f"🎉 WELCOME MESSAGE EVENT")
+        print(f"{'='*50}")
+        print(f"Data: {json.dumps(data, indent=2)}")
+        print(f"{'='*50}\n")
+        
+        return Response({"result": "ok"})
+        
+    except Exception as e:
+        logger.error(f"Error processing welcome message: {str(e)}", exc_info=True)
+        return Response({"result": "ok"})
+
+
+@swagger_auto_schema(
+    method='post',
+    operation_description="Handle bot delete event from Bitrix24 (EVENT_BOT_DELETE).",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        description='Bot delete event data from Bitrix24'
+    ),
+    responses={
+        200: openapi.Response(
+            description='Success',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'result': openapi.Schema(type=openapi.TYPE_STRING, example='ok')
+                }
+            )
+        )
+    },
+    tags=['Bot Events']
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def bot_delete(request):
+    """
+    Handle EVENT_BOT_DELETE - when the bot is deleted from Bitrix24.
+    """
+    try:
+        # Parse incoming data
+        body = request.body.decode('utf-8')
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            # Try parsing as query string
+            parsed = urllib.parse.parse_qs(body)
+            data_str = parsed.get('data', [None])[0]
+            if data_str:
+                try:
+                    data = json.loads(data_str) if isinstance(data_str, str) else data_str
+                except (json.JSONDecodeError, TypeError):
+                    data = data_str if isinstance(data_str, dict) else {}
+            else:
+                data = {}
+        
+        logger.info("🗑️ Bot delete event received")
+        logger.info(f"Delete data: {json.dumps(data, indent=2)}")
+        
+        print(f"\n{'='*50}")
+        print(f"🗑️ BOT DELETE EVENT")
+        print(f"{'='*50}")
+        print(f"Data: {json.dumps(data, indent=2)}")
+        print(f"{'='*50}\n")
+        
+        return Response({"result": "ok"})
+        
+    except Exception as e:
+        logger.error(f"Error processing bot delete: {str(e)}", exc_info=True)
+        return Response({"result": "ok"})
+
+
+def process_message(request):
+    """
+    Process incoming message from Bitrix24.
     Prints the message and sends a response back to the dialog.
     """
     try:
@@ -130,12 +230,15 @@ def webhook_handler(request):
             bot_info = bot_data.copy()
             access_token = bot_data.get('access_token', '')
         
-        # Log everything
+        # Log the received message
+        logger.info("=" * 60)
+        logger.info("📨 NEW MESSAGE RECEIVED")
+        logger.info("=" * 60)
         logger.info(f"User ID: {user_id}")
         logger.info(f"Dialog ID: {dialog_id}")
         logger.info(f"Message: {message}")
-        logger.info(f"Links Found: {', '.join(found_links)}")
-        logger.info(f"Deal ID: {deal_id}")
+        logger.info(f"Links Found: {', '.join(found_links) if found_links else 'None'}")
+        logger.info(f"Deal ID: {deal_id if deal_id else 'None'}")
         logger.info(f"Access Token: {access_token[:10]}..." if access_token else "Access Token: (empty)")
         
         # Log bot information
@@ -143,10 +246,11 @@ def webhook_handler(request):
             logger.info(f"Bot Information: {json.dumps(bot_info, indent=2)}")
         else:
             logger.info("Bot Information: (empty)")
+        logger.info("=" * 60)
         
         # Print to console
         print(f"\n{'='*50}")
-        print(f"📨 MESSAGE RECEIVED")
+        print(f"📨 NEW MESSAGE RECEIVED")
         print(f"{'='*50}")
         print(f"User ID: {user_id}")
         print(f"Dialog ID: {dialog_id}")
@@ -164,11 +268,17 @@ def webhook_handler(request):
             print(f"Bot Information: None")
         print(f"{'='*50}\n")
         
-        # Send response message back to dialog
-        if access_token and dialog_id:
-            send_message_to_dialog(dialog_id, access_token, message, found_links, deal_id)
+        # Send the same message back to the user
+        if access_token and dialog_id and message:
+            send_message_to_dialog(dialog_id, access_token, message)
+            logger.info(f"✅ Echoed message back to user: {message}")
         else:
-            logger.warning("⚠️ Cannot send response: missing accessToken or dialogId")
+            if not access_token:
+                logger.warning("⚠️ Cannot send response: missing accessToken")
+            if not dialog_id:
+                logger.warning("⚠️ Cannot send response: missing dialogId")
+            if not message:
+                logger.warning("⚠️ Cannot send response: message is empty")
         
         return Response({"result": "ok"})
         
@@ -177,27 +287,18 @@ def webhook_handler(request):
         return Response({"result": "ok"})
 
 
-def send_message_to_dialog(dialog_id, access_token, user_message, links, deal_id):
+def send_message_to_dialog(dialog_id, access_token, user_message):
     """
     Send a message back to the Bitrix24 chat dialog using settings from settings.py.
+    Echoes back the exact same message the user sent.
     
     Args:
         dialog_id: Dialog/Chat ID
         access_token: Bot access token
-        user_message: Original message from user
-        links: List of extracted links from message
-        deal_id: Deal ID if available
+        user_message: Original message from user (will be echoed back)
     """
-    # Build response message - echo the received message
-    response_message = f"📨 Received: {user_message}"
-    
-    if links:
-        response_message += f"\n\n🔗 Found {len(links)} link(s):\n"
-        for link in links:
-            response_message += f"• {link}\n"
-    
-    if deal_id:
-        response_message += f"\n💼 Deal ID: {deal_id}"
+    # Echo the exact same message back
+    response_message = user_message
     
     # Bitrix24 API endpoint for sending messages via bot (using BITRIX_DOMAIN from settings)
     url = f"https://{settings.BITRIX_DOMAIN}/rest/imbot.message.add.json?auth={access_token}"
@@ -209,11 +310,11 @@ def send_message_to_dialog(dialog_id, access_token, user_message, links, deal_id
     }
     
     logger.info(f"📤 Sending message to dialog {dialog_id}")
-    logger.info(f"📝 Message content: {response_message}")
+    logger.info(f"📝 Echoing message: {response_message}")
     
     # Print to console
     print(f"\n{'='*50}")
-    print(f"📤 SENDING MESSAGE")
+    print(f"📤 SENDING MESSAGE (ECHO)")
     print(f"{'='*50}")
     print(f"Dialog ID: {dialog_id}")
     print(f"Message: {response_message}")
@@ -231,7 +332,7 @@ def send_message_to_dialog(dialog_id, access_token, user_message, links, deal_id
         http_code = response.status_code
         
         if http_code == 200:
-            logger.info(f"✅ Response message sent to dialog {dialog_id}")
+            logger.info(f"✅ Message echoed successfully to dialog {dialog_id}")
             logger.info(f"API Response: {response.text}")
             print(f"✅ Message sent successfully! Response: {response.text[:100]}")
         else:

@@ -123,5 +123,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 BITRIX_DOMAIN = os.environ.get('BITRIX_DOMAIN', 'cultiv.bitrix24.com')
 BITRIX_CLIENT_ID = os.environ.get('BITRIX_CLIENT_ID', 'local.693a9c0f77abd5.76481022')
 BITRIX_CLIENT_SECRET = os.environ.get('BITRIX_CLIENT_SECRET', 'TiR9H0GMYCUcJOYu0eQhmveEUy7YacZUtBJkYE4AYEWOeiLhV2')
-BITRIX_EVENT_HANDLER = os.environ.get('BITRIX_EVENT_HANDLER', 'https://testbot-2x1r.onrender.com/b24-hook.php')
+BITRIX_EVENT_HANDLER = os.environ.get('BITRIX_EVENT_HANDLER', 'https://testbot-2x1r.onrender.com')
 

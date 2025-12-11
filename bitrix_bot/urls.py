@@ -35,7 +35,12 @@ urlpatterns = [
     re_path(r'^swagger/$', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     re_path(r'^redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     
-    # API endpoints
-    path('b24-hook.php', views.webhook_handler, name='webhook'),
+    # API endpoints - Bot event handlers
+    path('bot/message', views.bot_message, name='bot_message'),
+    path('bot/welcome', views.bot_welcome, name='bot_welcome'),
+    path('bot/delete', views.bot_delete, name='bot_delete'),
+    
+    # Legacy endpoint (for backward compatibility)
+    path('b24-hook.php', views.bot_message, name='webhook'),
 ]
 
